@@ -26,25 +26,38 @@ module Validation
       end
 
       begin
-        if rule.respond_to?(:each_pair)
-          add_parameterized_rule(field, rule)
-        elsif rule.respond_to?(:each)
-          rule.each do |r|
-            if r.respond_to?(:each_pair)
-              add_parameterized_rule(field, r)
-            else
-              r = Validation::Rule.const_get(camelize(r)).new
-              add_object_to_rule(r)
-              rules[field] << r
-            end
-          end
-        else
-          rule = Validation::Rule.const_get(camelize(rule)).new
-          add_object_to_rule(rule)
-          rules[field] << rule
+        try_add_hash rule, field do |rule, field|
+          try_add_array rule, field
         end
       rescue NameError => e
+        puts e
         raise InvalidRule
+      end
+    end
+
+    def add_const_rule(rule, field)
+      rule = Validation::Rule.const_get(camelize(rule)).new
+      add_object_to_rule(rule)
+      rules[field] << rule
+    end
+
+    def try_add_hash(rule, field)
+      if rule.respond_to?(:each_pair)
+        add_parameterized_rule(field, rule)
+      else
+        yield rule, field
+      end
+    end
+
+    def try_add_array(rule, field)
+      if rule.respond_to?(:each)
+        rule.each do |r|
+          try_add_hash r, field do |rule, field|
+            add_const_rule(rule, field)
+          end
+        end
+      else
+        add_const_rule(rule, field)
       end
     end
 
